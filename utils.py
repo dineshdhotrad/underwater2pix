@@ -3,7 +3,6 @@ from torch.autograd import Variable
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-import cv2
 from metricss import rmetrics,nmetrics
 import pandas as pd
 
@@ -106,13 +105,6 @@ def test(test_data_loader, G, device, epoch, save_dir, csv_dir):
             x_ = (((x_[0] - x_[0].min()) * 255) / (x_[0].max() - x_[0].min())).cpu().numpy().transpose(1, 2, 0).astype(np.uint8)[...,::-1]
             y_ = (((y_[0] - y_[0].min()) * 255) / (y_[0].max() - y_[0].min())).cpu().numpy().transpose(1, 2, 0).astype(np.uint8)[...,::-1]
             y_fake = (((y_fake[0] - y_fake[0].min()) * 255) / (y_fake[0].max() - y_fake[0].min())).cpu().numpy().transpose(1, 2, 0).astype(np.uint8)[...,::-1]
-            cv2.imshow("inp",x_)
-            cv2.imshow("gen",y_fake)
-            cv2.imshow("tar",y_)
-            cv2.waitKey(0) 
-            
-            #closing all open windows 
-            cv2.destroyAllWindows() 
 
             
             mse, psnr,ssim = rmetrics(y_fake,y_)

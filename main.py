@@ -14,7 +14,7 @@ import argparse
 import os
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', required=False, default='rl_cpy', help='input dataset')
+parser.add_argument('--dataset', required=False, default='real_underwater', help='input dataset')
 parser.add_argument('--res_dir', required=False, default='1', help='input dataset')
 parser.add_argument('--direction', required=False, default='AtoB', help='input and target image order')
 parser.add_argument('--batch_size', type=int, default=32, help='train batch size')
@@ -26,8 +26,8 @@ parser.add_argument('--crop_size', type=int, default=256, help='crop size (0 is 
 parser.add_argument('--fliplr', type=bool, default=True, help='random fliplr True of False')
 parser.add_argument('--ckpt_s', type=bool, default=True, help='Checkpoint Save')
 parser.add_argument('--num_epochs', type=int, default=200, help='number of train epochs')
-parser.add_argument('--lrG', type=float, default=0.00001, help='learning rate for generator, default=0.0002')
-parser.add_argument('--lrD', type=float, default=0.00001, help='learning rate for discriminator, default=0.0002')
+parser.add_argument('--lrG', type=float, default=0.0002, help='learning rate for generator, default=0.0002')
+parser.add_argument('--lrD', type=float, default=0.0002, help='learning rate for discriminator, default=0.0002')
 parser.add_argument('--lamb', type=float, default=100, help='lambda for L1 loss')
 parser.add_argument('--alph', type=float, default=0.1, help='alpha for VGG Perceptual loss')
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for Adam optimizer')
@@ -118,8 +118,8 @@ L1_loss = torch.nn.L1Loss().cuda()
 VGG_Loss = VGGPerceptualLoss().cuda()
 
 # Optimizers
-G_optimizer = torch.optim.Adam(G.parameters(), lr=params.lrG, betas=(params.beta1, params.beta2), weight_decay=1e-6)
-D_optimizer = torch.optim.Adam(D.parameters(), lr=params.lrD, betas=(params.beta1, params.beta2), weight_decay=1e-6)
+G_optimizer = torch.optim.Adam(G.parameters(), lr=params.lrG, betas=(params.beta1, params.beta2), weight_decay=1e-5)
+D_optimizer = torch.optim.Adam(D.parameters(), lr=params.lrD, betas=(params.beta1, params.beta2), weight_decay=1e-5)
 
 # Training GAN
 D_avg_losses = []
@@ -221,7 +221,7 @@ for epoch in range(epochs, params.num_epochs):
     Img_logger.add_image("Generated", gen_image[r], step)
     Img_logger.add_image("Target", test_target[r], step)
     if epoch % 10 == 0:
-        print(f"--------Testing for Epoch No: {str(epoch)}--------")
+        print(f"--------Testing for Epoch No: {str(epoch+1)}--------")
         utils.test(test_data_loader, G, device, epoch, save_dir, csv_dir)
     
     
