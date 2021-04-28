@@ -8,16 +8,19 @@ from torch.autograd import Variable
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 from dataset import DatasetFromFolder
-from model import Generator, Discriminator,  VGGPerceptualLoss
+from model import Generator, Discriminator, VGGPerceptualLoss
 import utils
 import argparse
 import os
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', required=False, default='real_underwater', help='input dataset')
+parser.add_argument('--test', type=bool, default=True, help='Checkpoint Save')
 parser.add_argument('--res_dir', required=False, default='1', help='input dataset')
 parser.add_argument('--direction', required=False, default='AtoB', help='input and target image order')
 parser.add_argument('--batch_size', type=int, default=32, help='train batch size')
+parser.add_argument('--batch_size_test', type=int, default=1, help='train batch size')
 parser.add_argument('--ngf', type=int, default=32)
 parser.add_argument('--ndf', type=int, default=32)
 parser.add_argument('--input_size', type=int, default=256, help='input size')
@@ -25,10 +28,11 @@ parser.add_argument('--resize_scale', type=int, default=286, help='resize scale 
 parser.add_argument('--crop_size', type=int, default=256, help='crop size (0 is false)')
 parser.add_argument('--fliplr', type=bool, default=True, help='random fliplr True of False')
 parser.add_argument('--ckpt_s', type=bool, default=True, help='Checkpoint Save')
-parser.add_argument('--num_epochs', type=int, default=200, help='number of train epochs')
-parser.add_argument('--lrG', type=float, default=0.0002, help='learning rate for generator, default=0.0002')
-parser.add_argument('--lrD', type=float, default=0.0002, help='learning rate for discriminator, default=0.0002')
+parser.add_argument('--num_epochs', type=int, default=500, help='number of train epochs')
+parser.add_argument('--lrG', type=float, default=0.0001, help='learning rate for generator, default=0.0002')
+parser.add_argument('--lrD', type=float, default=0.0001, help='learning rate for discriminator, default=0.0002')
 parser.add_argument('--lamb', type=float, default=100, help='lambda for L1 loss')
+parser.add_argument('--gam', type=float, default=0.45, help='weight for L1 loss and SSIM loss')
 parser.add_argument('--alph', type=float, default=0.1, help='alpha for VGG Perceptual loss')
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for Adam optimizer')
 parser.add_argument('--beta2', type=float, default=0.999, help='beta2 for Adam optimizer')
@@ -79,7 +83,7 @@ train_data_loader = torch.utils.data.DataLoader(dataset=train_data,
 # Test data
 test_data = DatasetFromFolder(data_dir, subfolderA='testA', subfolderB='testB', direction=params.direction, transform=transform)
 test_data_loader = torch.utils.data.DataLoader(dataset=test_data,
-                                               batch_size=params.batch_size,
+                                               batch_size=params.batch_size_test,
                                                shuffle=False)
 test_input, test_target = test_data_loader.__iter__().__next__()
 
@@ -116,10 +120,11 @@ Img_logger = SummaryWriter(Img_log_dir)
 BCE_loss = torch.nn.BCELoss().cuda()
 L1_loss = torch.nn.L1Loss().cuda()
 VGG_Loss = VGGPerceptualLoss().cuda()
+MSE_loss = torch.nn.MSELoss().cuda()
 
 # Optimizers
-G_optimizer = torch.optim.Adam(G.parameters(), lr=params.lrG, betas=(params.beta1, params.beta2), weight_decay=1e-5)
-D_optimizer = torch.optim.Adam(D.parameters(), lr=params.lrD, betas=(params.beta1, params.beta2), weight_decay=1e-5)
+G_optimizer = torch.optim.Adam(G.parameters(), lr=params.lrG, betas=(params.beta1, params.beta2), weight_decay=1e-6)
+D_optimizer = torch.optim.Adam(D.parameters(), lr=params.lrD, betas=(params.beta1, params.beta2), weight_decay=1e-6)
 
 # Training GAN
 D_avg_losses = []
@@ -184,11 +189,16 @@ for epoch in range(epochs, params.num_epochs):
         # L1 loss
         l1_loss = params.lamb * L1_loss(gen_image, y_)
 
+        #SSIM Loss
+        mse_loss = params.lamb * MSE_loss(gen_image, y_)
+
+        mean = (params.gam * l1_loss) + (1-params.gam )*mse_loss
+
         # VGG Feature Extract
         VGG_L1_Loss = params.alph * VGG_Loss(gen_image, y_)
 
         # Back propagation
-        G_loss = G_fake_loss + l1_loss + VGG_L1_Loss
+        G_loss = G_fake_loss + mean + VGG_L1_Loss
         G.zero_grad()
         G_loss.backward()
         G_optimizer.step()
@@ -212,27 +222,21 @@ for epoch in range(epochs, params.num_epochs):
     # avg loss values for plot
     D_avg_losses.append(D_avg_loss)
     G_avg_losses.append(G_avg_loss)
-
-    # Show result for test image
-    gen_image = G(Variable(test_input.cuda()))
-    gen_image = gen_image.cpu().data
-    r = np.random.randint(0,len(test_input))
-    Img_logger.add_image("Input", test_input[r], step)
-    Img_logger.add_image("Generated", gen_image[r], step)
-    Img_logger.add_image("Target", test_target[r], step)
-    if epoch % 10 == 0:
-        print(f"--------Testing for Epoch No: {str(epoch+1)}--------")
-        utils.test(test_data_loader, G, device, epoch, save_dir, csv_dir)
     
+    # Plot average losses after every epoch
+    utils.plot_loss(D_avg_losses, G_avg_losses, params.num_epochs, save=True, save_dir=save_dir)
+
+    # For every 10 epoch test the model on test data and save the model
+    if epoch % 10 == 0:
+        if params.test:
+            print(f"--------Testing for Epoch No: {str(epoch)}--------")
+            utils.test(test_data_loader, G, device, epoch, save_dir, csv_dir)
+    
+        # Save trained parameters of model
+        torch.save(G.state_dict(), model_dir + 'generator_param.pkl')
+        torch.save(D.state_dict(), model_dir + 'discriminator_param.pkl')
     
     # Save Checkpoints
     if params.ckpt_s:
         utils.save_checkpoint(epoch, G, G_optimizer, G_ckpt_dir)
         utils.save_checkpoint(epoch, D, D_optimizer, D_ckpt_dir)
-
-# Plot average losses
-utils.plot_loss(D_avg_losses, G_avg_losses, params.num_epochs, save=True, save_dir=save_dir)
-
-# Save trained parameters of model
-torch.save(G.state_dict(), model_dir + 'generator_param.pkl')
-torch.save(D.state_dict(), model_dir + 'discriminator_param.pkl')

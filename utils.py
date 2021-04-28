@@ -3,7 +3,8 @@ from torch.autograd import Variable
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from metricss import rmetrics,nmetrics
+import cv2
+from metrics import rmetrics,nmetrics
 import pandas as pd
 
 # For logger
@@ -107,7 +108,7 @@ def test(test_data_loader, G, device, epoch, save_dir, csv_dir):
             y_fake = (((y_fake[0] - y_fake[0].min()) * 255) / (y_fake[0].max() - y_fake[0].min())).cpu().numpy().transpose(1, 2, 0).astype(np.uint8)[...,::-1]
 
             
-            mse, psnr,ssim = rmetrics(y_fake,y_)
+            mse, psnr,ssim = rmetrics(y_,y_fake)
             uiqm,uciqe = nmetrics(y_fake)
             mse_list.append(mse)
             ssim_list.append(ssim)

@@ -2,7 +2,6 @@ import torch
 from torchvision.models import vgg19
 
 
-
 class ConvBlock(torch.nn.Module):
     def __init__(self, input_size, output_size, kernel_size=4, stride=2, padding=1, activation=True, batch_norm=True):
         super(ConvBlock, self).__init__()
@@ -36,13 +35,20 @@ class DoubConvBlock(torch.nn.Module):
     def forward(self, x):
         if self.activation:
             out = self.conv1(self.lrelu(x))
-            out = self.conv2(out)
         else:
             out = self.conv1(x)
+
+        if self.batch_norm:
+            return self.bn(out)
+        
+        if self.activation:
+            out = self.conv2(self.lrelu(out))
+        else:
             out = self.conv2(out)
 
         if self.batch_norm:
             return self.bn(out)
+
         else:
             return out
 
@@ -172,15 +178,23 @@ class Generator(torch.nn.Module):
         out = torch.nn.Tanh()(dec8)
         return out
 
+    # def normal_weight_init(self, mean=0.0, std=0.02):
+    #     for m in self.children():
+    #         if isinstance(m, DoubConvBlock):
+    #             torch.nn.init.normal_(m.conv1.weight, mean, std)
+    #             torch.nn.init.normal_(m.conv2.weight, mean, std)
+    #         if isinstance(m, DeconvBlock):
+    #             torch.nn.init.normal_(m.deconv.weight, mean, std)
+
 class Discriminator(torch.nn.Module):
     def __init__(self, input_dim, num_filter, output_dim):
         super(Discriminator, self).__init__()
 
-        self.conv1 = ConvBlock(input_dim, num_filter, activation=False, batch_norm=False)
-        self.conv2 = ConvBlock(num_filter, num_filter * 2)
-        self.conv3 = ConvBlock(num_filter * 2, num_filter * 4)
-        self.conv4 = ConvBlock(num_filter * 4, num_filter * 8, stride=1)
-        self.conv5 = ConvBlock(num_filter * 8, output_dim, stride=1, batch_norm=False)
+        self.conv1 = DoubConvBlock(input_dim, num_filter, activation=False, batch_norm=False)
+        self.conv2 = DoubConvBlock(num_filter, num_filter * 2)
+        self.conv3 = DoubConvBlock(num_filter * 2, num_filter * 4)
+        self.conv4 = DoubConvBlock(num_filter * 4, num_filter * 8, stride=1)
+        self.conv5 = DoubConvBlock(num_filter * 8, output_dim, stride=1, batch_norm=False)
 
     def forward(self, x, label):
         x = torch.cat([x, label], 1)
@@ -191,6 +205,11 @@ class Discriminator(torch.nn.Module):
         x = self.conv5(x)
         out = torch.nn.Sigmoid()(x)
         return out
+
+    # def normal_weight_init(self, mean=0.0, std=0.02):
+    #     for m in self.children():
+    #         if isinstance(m, ConvBlock):
+    #             torch.nn.init.normal_(m.conv.weight, mean, std)
 
 
 
@@ -241,6 +260,13 @@ class Generator128(torch.nn.Module):
         out = torch.nn.Tanh()(dec7)
         return out
 
+    # def normal_weight_init(self, mean=0.0, std=0.02):
+    #     for m in self.children():
+    #         if isinstance(m, ConvBlock):
+    #             torch.nn.init.normal_(m.conv.weight, mean, std)
+    #         if isinstance(m, DeconvBlock):
+    #             torch.nn.init.normal_(m.deconv.weight, mean, std)
+
 class Discriminator128(torch.nn.Module):
     def __init__(self, input_dim, num_filter, output_dim):
         super(Discriminator128, self).__init__()
@@ -258,3 +284,8 @@ class Discriminator128(torch.nn.Module):
         x = self.conv4(x)
         out = torch.nn.Sigmoid()(x)
         return out
+
+    # def normal_weight_init(self, mean=0.0, std=0.02):
+    #     for m in self.children():
+    #         if isinstance(m, ConvBlock):
+    #             torch.nn.init.normal_(m.conv.weight, mean, std)
